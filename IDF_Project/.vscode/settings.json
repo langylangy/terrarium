@@ -1,0 +1,18 @@
+{
+  "idf.espIdfPath": "/Users/karelfunda/esp/v5.4/esp-idf",
+  "idf.toolsPath": "/Users/karelfunda/.espressif",
+  "idf.pythonInstallPath": "C:\\Espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.flashType": "UART",
+  "idf.port": "/dev/tty.usbmodem2101",
+  "idf.customExtraVars": {
+    "OPENOCD_SCRIPTS": "/Users/karelfunda/.espressif/tools/openocd-esp32/v0.12.0-esp32-20230921/openocd-esp32/share/openocd/scripts",
+    "ESP_ROM_ELF_DIR": "/Users/karelfunda/.espressif/tools/esp-rom-elfs/20230320/",
+    "IDF_TARGET": "esp32s3"
+  },
+  "idf.openOcdConfigs": ["board/esp32s3-builtin.cfg"],
+  "terminal.integrated.scrollback": 5000,
+  "idf.espIdfPathWin": "c:\\Espressif\\v5.4\\esp-idf",
+  "idf.toolsPathWin": "C:\\Espressif",
+  "idf.portWin": "COM3",
+  "idf.monitorPort": "COM3"
+}

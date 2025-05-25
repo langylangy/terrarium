@@ -1,0 +1,2 @@
+source C:/XWORKS/ESP/base-touch/base-touch/IDF_Project/build/gdbinit/symbols
+source C:/XWORKS/ESP/base-touch/base-touch/IDF_Project/build/gdbinit/connect
