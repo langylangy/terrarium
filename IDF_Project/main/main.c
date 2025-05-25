@@ -32,6 +32,18 @@
 #include "demos/lv_demos.h"
 #include "owb_gpio.h"
 
+// Přidej tyto hlavičky
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "freertos/event_groups.h"
+
+#include "nvs_flash.h"
+// #include "protocol_examples_common.h"
+#include "esp_sntp.h"
+
+#define WIFI_SSID "AMF"
+#define WIFI_PASS "AMF130+-"
+
 #define EXAMPLE_PIN_NUM_SCLK 39
 #define EXAMPLE_PIN_NUM_MOSI 38
 #define EXAMPLE_PIN_NUM_MISO 40
@@ -71,7 +83,10 @@
 #define DS18B20_GPIO 10
 #define ONE_WIRE_GPIO 10                   // <-- TADY DOPLŇ MAKRO
 #define THERMOSTAT_GPIO 9                  // výstupní pin pro relé/topení
-static float thermostat_threshold = 28.0f; // výchozí hodnota
+static float thermostat_threshold = 30.0f; // výchozí hodnota
+#define SLEEP_TIME 20000                   // 20 sekund v milisekundách
+static bool is_dimmed = false;
+static int stored_brightness = 50; // výchozí jas
 
 // static owb_rmt_driver_info rmt_driver_info;
 static OneWireBus *owb = NULL;
@@ -88,6 +103,27 @@ esp_lcd_touch_handle_t tp;
 
 SemaphoreHandle_t i2c_mutex;
 SemaphoreHandle_t get_i2c_mutex(void);
+
+static EventGroupHandle_t wifi_event_group;
+#define WIFI_CONNECTED_BIT BIT0
+
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
+        esp_wifi_connect();
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        esp_wifi_connect();
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+        ESP_LOGI("WIFI", "Připojeno!");
+    }
+}
 
 // void lvgl_qmi8658_ui_init(lv_obj_t *parent);
 
@@ -347,7 +383,94 @@ void lvgl_tick_timer_init(uint32_t ms)
     ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, ms * 1000));
 }
+void initialize_wifi(void)
+{
+    ESP_ERROR_CHECK(nvs_flash_init());
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASS,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+        },
+    };
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+
+    // vytvoření event group a registrace handleru
+    wifi_event_group = xEventGroupCreate();
+
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+                                                        ESP_EVENT_ANY_ID,
+                                                        &wifi_event_handler,
+                                                        NULL,
+                                                        NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
+                                                        IP_EVENT_STA_GOT_IP,
+                                                        &wifi_event_handler,
+                                                        NULL,
+                                                        NULL));
+
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_LOGI("WIFI", "Wi-Fi inicializace dokončena");
+}
+
+void initialize_sntp(void)
+{
+    ESP_LOGI("SNTP", "Inicializuji SNTP");
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    esp_sntp_init();
+}
+
+void obtain_time(void)
+{
+    initialize_sntp();
+    setenv("TZ", "CET-1CEST,M3.5.0/2,M10.5.0/3", 1);
+    tzset();
+    time_t now = 0;
+    struct tm timeinfo = {0};
+    int retry = 0;
+    const int retry_count = 10;
+
+    while (timeinfo.tm_year < (2016 - 1900) && ++retry < retry_count)
+    {
+        ESP_LOGI("SNTP", "Čekám na čas (%d/%d)...", retry, retry_count);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        time(&now);
+        localtime_r(&now, &timeinfo);
+    }
+    if (retry < retry_count)
+    {
+        ESP_LOGI("SNTP", "Čas synchronizován: %s", asctime(&timeinfo));
+    }
+    else
+    {
+        ESP_LOGW("SNTP", "Nepodařilo se synchronizovat čas");
+    }
+}
+
+void print_current_time(void)
+{
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    ESP_LOGI("TIME", "Aktuální čas: %02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+
+    char time_str[6]; // hh:mm + \0
+    snprintf(time_str, sizeof(time_str), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+
+    lv_label_set_text(ui_timeNTP, time_str);
+}
 static void task(void *param)
 {
     // ESP_LOGI(TAG, "run");
@@ -390,23 +513,51 @@ void thermostat_set_threshold(float new_threshold)
 }
 // ------------------------
 // VLOŽ TOHLE NAD app_main()
+void screenTouch_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "Spouštím task pro touch");
+    while (1)
+    {
+        if (lv_disp_get_inactive_time(NULL) > SLEEP_TIME)
+        {
+            if (!is_dimmed)
+            {
+                stored_brightness = 50;      // nastav vlastní logiku uložení
+                bsp_brightness_set_level(0); // vypni podsvícení
+                is_dimmed = true;
+                ESP_LOGI("SLEEP", "Displej zhasnut po %d ms nečinnosti", SLEEP_TIME);
+            }
+        }
+        else
+        {
+            if (is_dimmed)
+            {
+                bsp_brightness_set_level(stored_brightness); // obnov podsvícení
+                is_dimmed = false;
+                ESP_LOGI("SLEEP", "Displej rozsvícen");
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(100)); // Pauza mezi cykly
+    }
+}
 // ------------------------
 void ds18b20_task(void *pvParameters)
 {
     UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
-    ESP_LOGI("STACK", "Stack min free: %u words", (unsigned int)watermark);
+
     while (1)
     {
         ds18b20_convert_all(owb);
         vTaskDelay(pdMS_TO_TICKS(750)); // Počkej na konverzi
-
+        ESP_LOGI("STACK", "Stack min free: %u words", (unsigned int)watermark);
+        print_current_time();
         float temp = 0;
         ds18b20_read_temp(ds18b20_info, &temp);
         ESP_LOGI("DS18B20", "Teplota: %.2f °C", temp);
 
         if (lvgl_lock(50))
         {
-            if (ui_TempLabel != NULL)
+            if (ui_temperatureTerra != NULL)
             {
                 // lv_label_set_text_fmt(ui_TempLabel, "Teplota: %.2f °C", temp);
                 char buf[32];
@@ -414,23 +565,31 @@ void ds18b20_task(void *pvParameters)
                 char tempBig[8];
                 snprintf(tempBig, sizeof(buf), "%.1f", temp);
 
-                lv_label_set_text(ui_TempLabel, buf);
                 lv_label_set_text(ui_temperatureTerra, tempBig);
-                if (temp >= thermostat_threshold)
+                // Získání aktuálního času
+                time_t now;
+                struct tm timeinfo;
+                time(&now);
+                localtime_r(&now, &timeinfo);
+
+                // Podmínka pro termostat
+                if (temp >= thermostat_threshold && timeinfo.tm_hour >= 5 && timeinfo.tm_hour < 20)
                 {
                     gpio_set_level(THERMOSTAT_GPIO, 1); // zapnout výstup
-                    ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C ≥ %.1f °C → ZAPNUTO", temp, thermostat_threshold);
+                    ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C ≥ %.1f °C a čas mezi 5:00–20:00 → ZAPNUTO", temp, thermostat_threshold);
+                    lv_obj_clear_flag(ui_labelPHBicoHeating, LV_OBJ_FLAG_HIDDEN);
                 }
                 else
                 {
                     gpio_set_level(THERMOSTAT_GPIO, 0); // vypnout výstup
-                    ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C < %.1f °C → VYPNUTO", temp, thermostat_threshold);
+                    ESP_LOGI("THERMOSTAT", "Podmínky nesplněny (%.1f °C nebo mimo 5:00–20:00) → VYPNUTO", temp);
+                    lv_obj_add_flag(ui_labelPHBicoHeating, LV_OBJ_FLAG_HIDDEN); /// Flags
                 }
                 // gauge_set_speed((int)temp);
             }
             lvgl_unlock();
         }
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Pauza mezi cykly
+        vTaskDelay(pdMS_TO_TICKS(5000)); // Pauza mezi cykly
     }
 }
 static owb_gpio_driver_info gpio_driver_info;
@@ -473,6 +632,7 @@ void app_main(void)
     };
     gpio_config(&io_conf);
     gpio_set_level(THERMOSTAT_GPIO, 0); // výchozí stav: vypnuto
+    initialize_wifi();
 
     if (lvgl_lock(-1))
     {
@@ -490,12 +650,9 @@ void app_main(void)
         // lv_demo_stress();
 
         ui_init();
-        ui_TempLabel = lv_label_create(lv_scr_act());
-        lv_label_set_text(ui_TempLabel, "Teplota: -- °C");
-        lv_obj_align(ui_TempLabel, LV_ALIGN_BOTTOM_LEFT, 10, -20);
         lvgl_unlock();
     }
-
+    obtain_time();
     // lv_timer_create(speed_demo_cb, 50, NULL);
 
     // vytvoření LVGL widgetu pro teplotu
@@ -506,6 +663,10 @@ void app_main(void)
     // // inicializace senzoru a spuštění úlohy
     ds18b20_init_sensor();
     xTaskCreatePinnedToCore(ds18b20_task, "ds18b20_task", 8192, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(screenTouch_task, "screenTouch_task", 8192, NULL, 5, NULL, 1);
+    xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT,
+                        pdFALSE, pdTRUE, portMAX_DELAY);
+    ESP_LOGI("WIFI", "Wi-Fi připojeno – pokračuji v aplikaci");
     // }
 }
 

@@ -20,7 +20,11 @@ idf_component_register(
           "ui/images"
           "ui/fonts"
           "../include"
-    REQUIRES
+      REQUIRES
+        esp_wifi
+        esp_event
+        nvs_flash
+        esp_netif
         spiffs
 )
 # Create SPIFFS image from spiffs_data directory

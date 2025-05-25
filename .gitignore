@@ -1,0 +1,7 @@
+IDF_Project/.vscode/settings.json
+IDF_Project/build/**
+IDF_Project/build/esp-idf/log/**
+
+_squareline/backup
+IDF_Project/build
+IDF_Project/build

@@ -34,8 +34,8 @@ LV_IMG_DECLARE(ui_img_1882603517);    // assets/assets-2.png
 LV_IMG_DECLARE(ui_img_scull_png);    // assets/scull.png
 
 // FONTS
-LV_FONT_DECLARE(ui_font_FontAwesomepro6light30);
 LV_FONT_DECLARE(ui_font_FontAwesomepro6light20);
+LV_FONT_DECLARE(ui_font_FontAwesomepro6light30);
 LV_FONT_DECLARE(ui_font_FontAwesomepro6lightSmall);
 
 // UI INIT

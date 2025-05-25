@@ -7,8 +7,8 @@ SET(SOURCES screens/ui_MainScreen.c
     ui_events.c
     images/ui_img_1882603517.c
     images/ui_img_scull_png.c
-    fonts/ui_font_FontAwesomepro6light30.c
     fonts/ui_font_FontAwesomepro6light20.c
+    fonts/ui_font_FontAwesomepro6light30.c
     fonts/ui_font_FontAwesomepro6lightSmall.c)
 
 add_library(ui ${SOURCES})
