@@ -10,6 +10,9 @@ idf_component_register(
         "ds18b20.c"
         "gauge.c"
         "main.c"
+        "ui/fonts/ui_font_FontAwesomepro6lightSmall.c"
+        "ui/fonts/ui_font_FontAwesomepro6light20.c"
+        "ui/fonts/ui_font_FontAwesomepro6light30.c"
         ${SRC_UI}
       INCLUDE_DIRS
           "."

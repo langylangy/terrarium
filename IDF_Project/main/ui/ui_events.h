@@ -10,7 +10,6 @@
 extern "C" {
 #endif
 
-void button11(lv_event_t * e);
 void AccelScreenLoadEvent(lv_event_t * e);
 void AccelScreenUnloadEvent(lv_event_t * e);
 

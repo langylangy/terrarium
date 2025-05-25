@@ -1,0 +1,19 @@
+{
+  "codename": "FontAwesomepro6lightSmall",
+  "ttf_path": "/assets/fa6pro-light-300.ttf",
+  "bin_path": "/assets\\ui_font_FontAwesomepro6lightSmall.bin",
+  "c_path": "/assets\\ui_font_FontAwesomepro6lightSmall.c",
+  "cfg_path": "/assets\\ui_font_FontAwesomepro6lightSmall.fcfg",
+  "size": 12,
+  "bpp": 4,
+  "letters": 0,
+  "ranges": [
+    "0xe00c",
+    "        0xf043",
+    "        0xf2c9",
+    "       0xf6d5"
+  ],
+  "symbols": "",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}

@@ -6,12 +6,9 @@ SET(SOURCES screens/ui_MainScreen.c
     ui_helpers.c
     ui_events.c
     images/ui_img_1882603517.c
-    images/ui_img_942215904.c
-    images/ui_img_1798728470.c
-    images/ui_img_1601502596.c
     images/ui_img_scull_png.c
-    fonts/ui_font_FontRoboto12.c
-    fonts/ui_font_FontRoboto20.c
-    fonts/ui_font_FontSpeed.c)
+    fonts/ui_font_FontAwesomepro6light30.c
+    fonts/ui_font_FontAwesomepro6light20.c
+    fonts/ui_font_FontAwesomepro6lightSmall.c)
 
 add_library(ui ${SOURCES})

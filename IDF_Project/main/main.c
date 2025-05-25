@@ -28,7 +28,7 @@
 #include "lvgl.h"
 
 #include "ui/ui.h"
-#include "gauge.h"
+// #include "gauge.h"
 #include "demos/lv_demos.h"
 #include "owb_gpio.h"
 
@@ -69,7 +69,9 @@
 #define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1
 
 #define DS18B20_GPIO 10
-#define ONE_WIRE_GPIO 10 // <-- TADY DOPLŇ MAKRO
+#define ONE_WIRE_GPIO 10                   // <-- TADY DOPLŇ MAKRO
+#define THERMOSTAT_GPIO 9                  // výstupní pin pro relé/topení
+static float thermostat_threshold = 28.0f; // výchozí hodnota
 
 // static owb_rmt_driver_info rmt_driver_info;
 static OneWireBus *owb = NULL;
@@ -381,32 +383,10 @@ static void task(void *param)
         }
     }
 }
-
-static void speed_demo_cb(lv_timer_t *timer)
+void thermostat_set_threshold(float new_threshold)
 {
-    static float speed = 0.0f;
-    static bool increasing = true;
-
-    gauge_set_speed(speed);
-
-    if (increasing)
-    {
-        speed += 0.25f;
-        if (speed >= GAUGE_SPEED_MAX)
-        {
-            increasing = false;
-        }
-    }
-    else
-    {
-        speed -= 0.25f;
-        if (speed <= 0)
-        {
-            increasing = true;
-        }
-    }
-
-    // ESP_LOGI(TAG, "Speed: %.1f", speed);
+    thermostat_threshold = new_threshold;
+    ESP_LOGI("THERMOSTAT", "Nový práh: %.1f °C", new_threshold);
 }
 // ------------------------
 // VLOŽ TOHLE NAD app_main()
@@ -431,8 +411,22 @@ void ds18b20_task(void *pvParameters)
                 // lv_label_set_text_fmt(ui_TempLabel, "Teplota: %.2f °C", temp);
                 char buf[32];
                 snprintf(buf, sizeof(buf), "Teplota: %.2f °C", temp);
+                char tempBig[8];
+                snprintf(tempBig, sizeof(buf), "%.1f", temp);
+
                 lv_label_set_text(ui_TempLabel, buf);
-                gauge_set_speed((int)temp);
+                lv_label_set_text(ui_temperatureTerra, tempBig);
+                if (temp >= thermostat_threshold)
+                {
+                    gpio_set_level(THERMOSTAT_GPIO, 1); // zapnout výstup
+                    ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C ≥ %.1f °C → ZAPNUTO", temp, thermostat_threshold);
+                }
+                else
+                {
+                    gpio_set_level(THERMOSTAT_GPIO, 0); // vypnout výstup
+                    ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C < %.1f °C → VYPNUTO", temp, thermostat_threshold);
+                }
+                // gauge_set_speed((int)temp);
             }
             lvgl_unlock();
         }
@@ -470,6 +464,15 @@ void app_main(void)
     bsp_brightness_init();
     bsp_brightness_set_level(50);
     // imu_fusion_init(0.35f, 0.60f);
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << THERMOSTAT_GPIO),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    gpio_set_level(THERMOSTAT_GPIO, 0); // výchozí stav: vypnuto
 
     if (lvgl_lock(-1))
     {

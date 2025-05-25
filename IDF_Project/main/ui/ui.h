@@ -31,15 +31,12 @@ extern lv_obj_t * ui____initial_actions0;
 
 // IMAGES AND IMAGE SETS
 LV_IMG_DECLARE(ui_img_1882603517);    // assets/assets-2.png
-LV_IMG_DECLARE(ui_img_942215904);    // assets/gauge-bg.png
-LV_IMG_DECLARE(ui_img_1798728470);    // assets/gauge-indicator.png
-LV_IMG_DECLARE(ui_img_1601502596);    // assets/gauge-needle.png
 LV_IMG_DECLARE(ui_img_scull_png);    // assets/scull.png
 
 // FONTS
-LV_FONT_DECLARE(ui_font_FontRoboto12);
-LV_FONT_DECLARE(ui_font_FontRoboto20);
-LV_FONT_DECLARE(ui_font_FontSpeed);
+LV_FONT_DECLARE(ui_font_FontAwesomepro6light30);
+LV_FONT_DECLARE(ui_font_FontAwesomepro6light20);
+LV_FONT_DECLARE(ui_font_FontAwesomepro6lightSmall);
 
 // UI INIT
 void ui_init(void);

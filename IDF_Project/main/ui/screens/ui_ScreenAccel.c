@@ -79,7 +79,7 @@ void ui_ScreenAccel_screen_init(void)
     lv_obj_clear_flag(ui_Container1, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_pad_row(ui_Container1, 5, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_column(ui_Container1, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_Container1, &ui_font_FontRoboto20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_Container1, &lv_font_montserrat_8, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_Label4 = lv_label_create(ui_Container1);
     lv_obj_set_width(ui_Label4, lv_pct(100));
@@ -445,7 +445,7 @@ void ui_ScreenAccel_screen_init(void)
     lv_obj_set_style_border_width(ui_Button4, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(ui_Button4, lv_color_hex(0x808080), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_Button4, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_Button4, &ui_font_FontRoboto20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_Button4, &lv_font_montserrat_8, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_Label5 = lv_label_create(ui_Button4);
     lv_obj_set_width(ui_Label5, LV_SIZE_CONTENT);   /// 1
