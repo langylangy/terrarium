@@ -14,15 +14,19 @@ extern "C" {
 extern void ui_MainScreen_screen_init(void);
 extern void ui_MainScreen_screen_destroy(void);
 extern lv_obj_t * ui_MainScreen;
-extern lv_obj_t * ui_Image5;
-extern lv_obj_t * ui_ContainerBat;
-extern lv_obj_t * ui_ImgScull;
 extern void ui_event_ButtonMenu1(lv_event_t * e);
 extern lv_obj_t * ui_ButtonMenu1;
 extern lv_obj_t * ui_Label6;
 extern lv_obj_t * ui_PanelTime;
 extern lv_obj_t * ui_timeNTP;
 extern lv_obj_t * ui_labelTimeIco;
+extern lv_obj_t * ui_PanelHeatBoard;
+extern lv_obj_t * ui_labelPHBcelsius;
+extern lv_obj_t * ui_temperatureTerra;
+extern lv_obj_t * ui_labelPHBicoTemp;
+extern lv_obj_t * ui_labelPHBicoHeating;
+extern lv_obj_t * ui_Arc1;
+extern lv_obj_t * ui_Label8;
 extern lv_obj_t * ui_Container11;
 extern lv_obj_t * ui_PanelHeatBoard1;
 extern lv_obj_t * ui_labelPHBcelsius1;
@@ -33,11 +37,6 @@ extern lv_obj_t * ui_PanelHumityBoard;
 extern lv_obj_t * ui_labelPHumityBcelsius1;
 extern lv_obj_t * ui_humityTerra;
 extern lv_obj_t * ui_labelPHumityBicoHumity;
-extern lv_obj_t * ui_PanelHeatBoard;
-extern lv_obj_t * ui_labelPHBcelsius;
-extern lv_obj_t * ui_temperatureTerra;
-extern lv_obj_t * ui_labelPHBicoTemp;
-extern lv_obj_t * ui_labelPHBicoHeating;
 // CUSTOM VARIABLES
 
 #ifdef __cplusplus
