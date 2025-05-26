@@ -573,7 +573,7 @@ void ds18b20_task(void *pvParameters)
                 localtime_r(&now, &timeinfo);
 
                 // Podmínka pro termostat
-                if (temp >= thermostat_threshold && timeinfo.tm_hour >= 5 && timeinfo.tm_hour < 20)
+                if (temp <= thermostat_threshold && timeinfo.tm_hour >= 5 && timeinfo.tm_hour < 20)
                 {
                     gpio_set_level(THERMOSTAT_GPIO, 1); // zapnout výstup
                     ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C ≥ %.1f °C a čas mezi 5:00–20:00 → ZAPNUTO", temp, thermostat_threshold);
