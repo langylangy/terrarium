@@ -8,6 +8,8 @@ idf_component_register(
         "owb.c"
         "owb_gpio.c"
         "ds18b20.c"
+        "Dusk2Dawn.c"
+        "dht.c"
         "gauge.c"
         "main.c"
         "ui/fonts/ui_font_FontAwesomepro6lightSmall.c"

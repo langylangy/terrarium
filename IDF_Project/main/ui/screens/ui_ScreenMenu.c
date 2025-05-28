@@ -11,8 +11,6 @@ lv_obj_t * ui_Label2;
 lv_obj_t * ui_Button1;
 lv_obj_t * ui_Label3;
 lv_obj_t * ui_Slider1;
-lv_obj_t * ui_Label1;
-lv_obj_t * ui_Label7;
 
 // event funtions
 void ui_event_Button3(lv_event_t * e)
@@ -104,16 +102,6 @@ void ui_ScreenMenu_screen_init(void)
     lv_obj_set_y(ui_Slider1, -124);
     lv_obj_set_align(ui_Slider1, LV_ALIGN_CENTER);
 
-    ui_Label1 = lv_label_create(ui_ScreenMenu);
-    lv_obj_set_width(ui_Label1, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_Label1, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_align(ui_Label1, LV_ALIGN_CENTER);
-
-    ui_Label7 = lv_label_create(ui_ScreenMenu);
-    lv_obj_set_width(ui_Label7, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_Label7, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_align(ui_Label7, LV_ALIGN_CENTER);
-
     lv_obj_add_event_cb(ui_Button3, ui_event_Button3, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_Button1, ui_event_Button1, LV_EVENT_ALL, NULL);
 
@@ -130,7 +118,5 @@ void ui_ScreenMenu_screen_destroy(void)
     ui_Button1 = NULL;
     ui_Label3 = NULL;
     ui_Slider1 = NULL;
-    ui_Label1 = NULL;
-    ui_Label7 = NULL;
 
 }

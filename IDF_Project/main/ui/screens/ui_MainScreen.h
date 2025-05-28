@@ -21,13 +21,6 @@ extern lv_obj_t * ui_PanelTime;
 extern lv_obj_t * ui_timeNTP;
 extern lv_obj_t * ui_labelTimeIco;
 extern lv_obj_t * ui_Container11;
-extern lv_obj_t * ui_PanelHeatBoard;
-extern lv_obj_t * ui_labelPHBcelsius;
-extern lv_obj_t * ui_temperatureTerra;
-extern lv_obj_t * ui_labelPHBicoTemp;
-extern lv_obj_t * ui_labelPHBicoHeating;
-extern lv_obj_t * ui_Arc1;
-extern lv_obj_t * ui_Label8;
 extern lv_obj_t * ui_PanelHeatBoard3;
 extern lv_obj_t * ui_Arc3;
 extern lv_obj_t * ui_Label10;
@@ -40,6 +33,13 @@ extern lv_obj_t * ui_Arc4;
 extern lv_obj_t * ui_humityTerra;
 extern lv_obj_t * ui_labelPHumityBicoHumity;
 extern lv_obj_t * ui_labelPHumityBcelsius1;
+extern lv_obj_t * ui_PanelHeatBoard;
+extern lv_obj_t * ui_labelPHBcelsius;
+extern lv_obj_t * ui_temperatureTerra;
+extern lv_obj_t * ui_labelPHBicoTemp;
+extern lv_obj_t * ui_labelPHBicoHeating;
+extern lv_obj_t * ui_Arc1;
+extern lv_obj_t * ui_Label8;
 // CUSTOM VARIABLES
 
 #ifdef __cplusplus

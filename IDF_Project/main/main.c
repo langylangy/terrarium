@@ -16,7 +16,6 @@
 #include "ds18b20.h"
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
-#include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "driver/i2c.h"
 
@@ -40,6 +39,9 @@
 #include "nvs_flash.h"
 // #include "protocol_examples_common.h"
 #include "esp_sntp.h"
+#include "dusk2dawn.h"
+#include <time.h>
+#include "dht.h"
 
 #define WIFI_SSID "AMF"
 #define WIFI_PASS "AMF130+-"
@@ -81,10 +83,13 @@
 #define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1
 
 #define DS18B20_GPIO 10
-#define ONE_WIRE_GPIO 10                   // <-- TADY DOPLŇ MAKRO
-#define THERMOSTAT_GPIO 9                  // výstupní pin pro relé/topení
+#define ONE_WIRE_GPIO 10  // <-- TADY DOPLŇ MAKRO
+#define THERMOSTAT_GPIO 9 // výstupní pin pro relé/topení
+#define LIGHT_GPIO 8      // můžeš změnit na libovolný GPIO
+#define DHT_GPIO 7        // nebo libovolný použitý GPIO
+
 static float thermostat_threshold = 30.0f; // výchozí hodnota
-#define SLEEP_TIME 20000                   // 20 sekund v milisekundách
+#define SLEEP_TIME 40000                   // 20 sekund v milisekundách
 static bool is_dimmed = false;
 static int stored_brightness = 50; // výchozí jas
 
@@ -97,6 +102,15 @@ static const char *TAG = "lvgl_example";
 static lv_indev_drv_t indev_drv; // Input device driver (Touch)
 static lv_disp_drv_t disp_drv;   /*Descriptor of a display driver*/
 static SemaphoreHandle_t lvgl_api_mux = NULL;
+
+float g_temperature_ds18b20 = 0;
+float g_temperature_dht22 = 0;
+float g_humidity_dht22 = 0;
+bool g_light_on = false;
+bool g_heating_on = false;
+
+// Mutex (volitelné, doporučeno pro vícejádrové zápisy)
+SemaphoreHandle_t data_mutex;
 
 esp_lcd_panel_handle_t panel_handle;
 esp_lcd_touch_handle_t tp;
@@ -537,61 +551,255 @@ void screenTouch_task(void *pvParameters)
                 ESP_LOGI("SLEEP", "Displej rozsvícen");
             }
         }
+        float t_ds18b20, t_dht, h_dht;
+        bool heating, light;
+
+        if (xSemaphoreTake(data_mutex, pdMS_TO_TICKS(10)))
+        {
+            t_ds18b20 = g_temperature_ds18b20;
+            t_dht = g_temperature_dht22;
+            h_dht = g_humidity_dht22;
+            heating = g_heating_on;
+            light = g_light_on;
+            xSemaphoreGive(data_mutex);
+
+            // Aktualizace LVGL widgetů
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%.1f", t_ds18b20);
+            lv_label_set_text(ui_temperatureTerra, buf);
+
+            snprintf(buf, sizeof(buf), "%.1f", t_dht);
+            lv_label_set_text(ui_temperatureTerra1, buf); // přidej vlastní label
+
+            snprintf(buf, sizeof(buf), "%d %%", (int16_t)h_dht);
+            lv_label_set_text(ui_humityTerra, buf);
+
+            if (heating)
+                lv_obj_clear_flag(ui_labelPHBicoHeating, LV_OBJ_FLAG_HIDDEN);
+            else
+                lv_obj_add_flag(ui_labelPHBicoHeating, LV_OBJ_FLAG_HIDDEN);
+        }
+        // if (light)
+        //     lv_obj_clear_flag(ui_labelPHBicoSun, LV_OBJ_FLAG_HIDDEN);
+        // else
+        //     lv_obj_add_flag(ui_labelPHBicoSun, LV_OBJ_FLAG_HIDDEN);
         vTaskDelay(pdMS_TO_TICKS(100)); // Pauza mezi cykly
     }
 }
 // ------------------------
-void ds18b20_task(void *pvParameters)
+
+void dask2down_task(void *pvParameters)
 {
-    UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+    Dusk2Dawn praha;
+    Dusk2Dawn_init(&praha, 50.0755, 14.4378, 2.0); // latitude, longitude, timezone
+
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << LIGHT_GPIO),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    gpio_set_level(LIGHT_GPIO, 0); // výchozí stav – světlo vypnuto
 
     while (1)
     {
-        ds18b20_convert_all(owb);
-        vTaskDelay(pdMS_TO_TICKS(750)); // Počkej na konverzi
-        ESP_LOGI("STACK", "Stack min free: %u words", (unsigned int)watermark);
-        print_current_time();
-        float temp = 0;
-        ds18b20_read_temp(ds18b20_info, &temp);
-        ESP_LOGI("DS18B20", "Teplota: %.2f °C", temp);
+        time_t now = time(NULL);
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
 
-        if (lvgl_lock(50))
+        int year = timeinfo.tm_year + 1900;
+        int month = timeinfo.tm_mon + 1;
+        int day = timeinfo.tm_mday;
+
+        bool isDST = timeinfo.tm_isdst > 0;
+
+        int sunrise = Dusk2Dawn_sunrise(&praha, year, month, day, isDST);
+        int sunset = Dusk2Dawn_sunset(&praha, year, month, day, isDST);
+
+        int nowMinutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
+
+        if (sunrise >= 0 && sunset >= 0)
         {
-            if (ui_temperatureTerra != NULL)
+            if (nowMinutes >= sunrise && nowMinutes < sunset)
             {
-                // lv_label_set_text_fmt(ui_TempLabel, "Teplota: %.2f °C", temp);
-                char buf[32];
-                snprintf(buf, sizeof(buf), "Teplota: %.2f °C", temp);
-                char tempBig[8];
-                snprintf(tempBig, sizeof(buf), "%.1f", temp);
-
-                lv_label_set_text(ui_temperatureTerra, tempBig);
-                // Získání aktuálního času
-                time_t now;
-                struct tm timeinfo;
-                time(&now);
-                localtime_r(&now, &timeinfo);
-
-                // Podmínka pro termostat
-                if (temp <= thermostat_threshold && timeinfo.tm_hour >= 5 && timeinfo.tm_hour < 20)
-                {
-                    gpio_set_level(THERMOSTAT_GPIO, 1); // zapnout výstup
-                    ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C ≥ %.1f °C a čas mezi 5:00–20:00 → ZAPNUTO", temp, thermostat_threshold);
-                    lv_obj_clear_flag(ui_labelPHBicoHeating, LV_OBJ_FLAG_HIDDEN);
-                }
-                else
-                {
-                    gpio_set_level(THERMOSTAT_GPIO, 0); // vypnout výstup
-                    ESP_LOGI("THERMOSTAT", "Podmínky nesplněny (%.1f °C nebo mimo 5:00–20:00) → VYPNUTO", temp);
-                    lv_obj_add_flag(ui_labelPHBicoHeating, LV_OBJ_FLAG_HIDDEN); /// Flags
-                }
-                // gauge_set_speed((int)temp);
+                gpio_set_level(LIGHT_GPIO, 1); // DEN – zapnout světlo
+                ESP_LOGI("LIGHT", "DEN – světlo ZAPNUTO (%02d:%02d)", timeinfo.tm_hour, timeinfo.tm_min);
             }
-            lvgl_unlock();
+            else
+            {
+                gpio_set_level(LIGHT_GPIO, 0); // NOC – vypnout světlo
+                ESP_LOGI("LIGHT", "NOC – světlo VYPNUTO (%02d:%02d)", timeinfo.tm_hour, timeinfo.tm_min);
+            }
         }
-        vTaskDelay(pdMS_TO_TICKS(5000)); // Pauza mezi cykly
+        else
+        {
+            gpio_set_level(LIGHT_GPIO, 0); // bezpečné vypnutí
+            ESP_LOGW("LIGHT", "Není možné spočítat východ/západ (např. polární den/noc)");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(60000)); // každou minutu
     }
 }
+
+void dht_task(void *pvParameter)
+{
+    float temperature = 0, humidity = 0;
+    esp_err_t res;
+
+    while (1)
+    {
+        res = dht_read_float_data(DHT_TYPE_AM2301, DHT_GPIO, &humidity, &temperature);
+        if (res == ESP_OK)
+        {
+            ESP_LOGI(TAG, "Teplota: %.1f °C, Vlhkost: %.1f %%", temperature, humidity);
+        }
+        else
+        {
+            ESP_LOGE(TAG, "Chyba čtení z DHT22: %s", esp_err_to_name(res));
+        }
+        if (xSemaphoreTake(data_mutex, pdMS_TO_TICKS(10)))
+        {
+            g_temperature_dht22 = temperature;
+            g_humidity_dht22 = humidity;
+            xSemaphoreGive(data_mutex);
+        }
+        vTaskDelay(pdMS_TO_TICKS(2000)); // každé 2 sekundy
+    }
+}
+void ds18b20_task(void *pvParameters)
+{
+    UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+    bool is_heating_on = false;
+    float temp = 0;
+    time_t now;
+    struct tm timeinfo;
+
+    while (1)
+    {
+        // Spuštění konverze
+        ds18b20_convert_all(owb);
+        vTaskDelay(pdMS_TO_TICKS(800)); // čekání na dokončení (800 ms je běžné)
+
+        // Přečtení teploty
+        if (ds18b20_read_temp(ds18b20_info, &temp) == ESP_OK)
+        {
+            ESP_LOGI("STACK", "Stack min free: %u words", (unsigned int)watermark);
+            print_current_time();
+            ESP_LOGI("DS18B20", "Teplota: %.2f °C", temp);
+
+            time(&now);
+            localtime_r(&now, &timeinfo);
+
+            // Aktualizace sdílených proměnných
+            if (xSemaphoreTake(data_mutex, pdMS_TO_TICKS(10)))
+            {
+                g_temperature_ds18b20 = temp;
+                g_heating_on = is_heating_on;
+                xSemaphoreGive(data_mutex);
+            }
+
+            // Logika termostatu s hysterezí 3°C
+            if (!is_heating_on && temp <= (thermostat_threshold - 3) &&
+                timeinfo.tm_hour >= 5 && timeinfo.tm_hour < 20)
+            {
+                gpio_set_level(THERMOSTAT_GPIO, 1);
+                ESP_LOGI("THERMOSTAT", "ZAPNUTO: %.1f °C ≤ %.1f °C, čas OK", temp, thermostat_threshold - 3);
+                is_heating_on = true;
+            }
+            else if (is_heating_on &&
+                     (temp >= thermostat_threshold ||
+                      timeinfo.tm_hour < 5 || timeinfo.tm_hour >= 20))
+            {
+                gpio_set_level(THERMOSTAT_GPIO, 0);
+                ESP_LOGI("THERMOSTAT", "VYPNUTO: %.1f °C ≥ %.1f °C nebo čas mimo", temp, thermostat_threshold);
+                is_heating_on = false;
+            }
+        }
+        else
+        {
+            ESP_LOGW("DS18B20", "Chyba čtení teploty");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000)); // hlavní smyčka běží každé 2 sekundy
+    }
+}
+
+// void ds18b20_task(void *pvParameters)
+// {
+//     UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+//     bool is_heating_on = false; // proměnná pro sledování stavu topení
+
+//     int conversionSkip = 0;
+//     int conversionDelay = 0;
+//     float temp = 0;
+//     time_t now;
+//     struct tm timeinfo;
+
+//     while (1)
+//     {
+
+//         if (conversionSkip == 0) // pouze jednou za X cyklů
+//         {
+//             ds18b20_convert_all(owb);
+//             conversionSkip = 1;  // nastav, že čekáme na výsledek
+//             conversionDelay = 0; // resetuj počítadlo čekání
+//         }
+//         else if (conversionSkip == 1)
+//         {
+//             // čekáme na dokončení konverze
+//             if (conversionDelay >= 4) // 4x 200ms = 800ms (přizpůsobte podle potřeby)
+//             {
+//                 ESP_LOGI("STACK", "Stack min free: %u words", (unsigned int)watermark);
+//                 print_current_time();
+
+//                 ds18b20_read_temp(ds18b20_info, &temp);
+//                 ESP_LOGI("DS18B20", "Teplota: %.2f °C", temp);
+
+//                 time(&now);
+//                 localtime_r(&now, &timeinfo);
+
+//                 conversionSkip = 0; // připrav na další cyklus
+//             }
+//             else
+//             {
+//                 conversionDelay++;
+//             }
+//         }
+
+//         if (ui_temperatureTerra != NULL && temp > 0)
+//         {
+//             if (xSemaphoreTake(data_mutex, pdMS_TO_TICKS(10)))
+//             {
+//                 g_temperature_ds18b20 = temp;
+//                 g_heating_on = is_heating_on;
+//                 xSemaphoreGive(data_mutex);
+//             }
+//             // lv_label_set_text_fmt(ui_TempLabel, "Teplota: %.2f °C", temp);
+//             char buf[32];
+//             snprintf(buf, sizeof(buf), "Teplota: %.2f °C", temp);
+//             char tempBig[8];
+//             snprintf(tempBig, sizeof(tempBig), "%.1f", temp);
+
+//             // Podmínka pro termostat s hysterezí 3°C
+//             if (!is_heating_on && temp <= (thermostat_threshold - 3) && timeinfo.tm_hour >= 5 && timeinfo.tm_hour < 20)
+//             {
+//                 gpio_set_level(THERMOSTAT_GPIO, 1); // zapnout výstup
+//                 ESP_LOGI("THERMOSTAT", "TEPLO: %.1f °C ≤ %.1f °C (práh-3) a čas mezi 5:00–20:00 → ZAPNUTO", temp, thermostat_threshold - 3);
+//                 is_heating_on = true;
+//             }
+//             else if (is_heating_on && (temp >= thermostat_threshold || timeinfo.tm_hour < 5 || timeinfo.tm_hour >= 20))
+//             {
+//                 gpio_set_level(THERMOSTAT_GPIO, 0); // vypnout výstup
+//                 ESP_LOGI("THERMOSTAT", "Podmínky pro vypnutí (%.1f °C ≥ %.1f °C nebo mimo 5:00–20:00) → VYPNUTO", temp, thermostat_threshold);
+//                 is_heating_on = false; // aktualizace stavu topení
+//             }
+//             // gauge_set_speed((int)temp);
+//         }
+//     }
+//     vTaskDelay(pdMS_TO_TICKS(1000)); // Pauza mezi cykly
+// }
 static owb_gpio_driver_info gpio_driver_info;
 
 void ds18b20_init_sensor()
@@ -610,6 +818,7 @@ void ds18b20_init_sensor()
 void app_main(void)
 {
 
+    data_mutex = xSemaphoreCreateMutex();
     i2c_mutex_init();
     lvgl_api_mux = xSemaphoreCreateRecursiveMutex();
     lv_init();
@@ -664,9 +873,10 @@ void app_main(void)
     ds18b20_init_sensor();
     xTaskCreatePinnedToCore(ds18b20_task, "ds18b20_task", 8192, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(screenTouch_task, "screenTouch_task", 8192, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(dask2down_task, "dask2down_task", 8192, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(dht_task, "dht_task", 8192, NULL, 5, NULL, 1);
     xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT,
                         pdFALSE, pdTRUE, portMAX_DELAY);
-    ESP_LOGI("WIFI", "Wi-Fi připojeno – pokračuji v aplikaci");
     // }
 }
 
