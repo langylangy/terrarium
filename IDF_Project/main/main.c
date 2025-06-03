@@ -378,12 +378,14 @@ void bsp_brightness_set_level(uint8_t level)
         return;
     }
 
-    uint32_t duty = (level * (LCD_BL_LEDC_DUTY - 1)) / 100;
+    // PWM duty = 0–1023 pro 10bit (LEDC_TIMER_10_BIT)
+    uint32_t max_duty = (1 << LCD_BL_LEDC_DUTY_RES) - 1;
+    uint32_t duty = (level * max_duty) / 100;
 
     ESP_ERROR_CHECK(ledc_set_duty(LCD_BL_LEDC_MODE, LCD_BL_LEDC_CHANNEL, duty));
     ESP_ERROR_CHECK(ledc_update_duty(LCD_BL_LEDC_MODE, LCD_BL_LEDC_CHANNEL));
 
-    ESP_LOGI(TAG, "LCD brightness set to %d%%", level);
+    ESP_LOGI(TAG, "LCD brightness set to %d%% (duty = %lu)", level, duty);
 }
 
 void lvgl_tick_timer_init(uint32_t ms)
@@ -536,7 +538,7 @@ void screenTouch_task(void *pvParameters)
         {
             if (!is_dimmed)
             {
-                stored_brightness = 50;      // nastav vlastní logiku uložení
+                stored_brightness = 10;      // nastav vlastní logiku uložení
                 bsp_brightness_set_level(0); // vypni podsvícení
                 is_dimmed = true;
                 ESP_LOGI("SLEEP", "Displej zhasnut po %d ms nečinnosti", SLEEP_TIME);
@@ -566,13 +568,16 @@ void screenTouch_task(void *pvParameters)
             // Aktualizace LVGL widgetů
             char buf[32];
             snprintf(buf, sizeof(buf), "%.1f", t_ds18b20);
-            lv_label_set_text(ui_temperatureTerra, buf);
-
+            lv_label_set_text(ui_temperatureTerraBoard, buf);
+            lv_arc_set_value(ui_Arc1, (int16_t)t_ds18b20);
             snprintf(buf, sizeof(buf), "%.1f", t_dht);
+            lv_label_set_text(ui_temperatureTerra, buf);  // přidej vlastní label
             lv_label_set_text(ui_temperatureTerra1, buf); // přidej vlastní label
-
-            snprintf(buf, sizeof(buf), "%d %%", (int16_t)h_dht);
+            // lv_arc_set_value(ui_Arc3, (int16_t)t_dht);
+            snprintf(buf, sizeof(buf), "%d", (int16_t)h_dht);
             lv_label_set_text(ui_humityTerra, buf);
+            lv_label_set_text(ui_humityTerra1, buf);
+            lv_arc_set_value(ui_Arc4, (int16_t)h_dht);
 
             if (heating)
                 lv_obj_clear_flag(ui_labelPHBicoHeating, LV_OBJ_FLAG_HIDDEN);
@@ -830,7 +835,7 @@ void app_main(void)
     lvgl_tick_timer_init(EXAMPLE_LVGL_TICK_PERIOD_MS);
     xTaskCreatePinnedToCore(task, "bsp_lv_port_task", 1024 * 20, NULL, 5, NULL, 1);
     bsp_brightness_init();
-    bsp_brightness_set_level(50);
+    bsp_brightness_set_level(10);
     // imu_fusion_init(0.35f, 0.60f);
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << THERMOSTAT_GPIO),

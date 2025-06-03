@@ -9,10 +9,11 @@
   "letters": 0,
   "ranges": [
     "0xe00c",
-    "0xf017",
-    "0xf043",
-    "0xf2c9",
-    "0xf6d5"
+    "  0xf013",
+    "  0xf017",
+    " 0xf043",
+    " 0xf2c9",
+    " 0xf6d5"
   ],
   "symbols": "",
   "customparams": "--no-compress --no-prefilter",

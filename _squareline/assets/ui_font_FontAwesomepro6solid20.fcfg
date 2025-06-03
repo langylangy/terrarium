@@ -1,0 +1,17 @@
+{
+  "codename": "FontAwesomepro6solid20",
+  "ttf_path": "/assets/fa6pro-solid-900.ttf",
+  "bin_path": "/assets\\ui_font_FontAwesomepro6solid20.bin",
+  "c_path": "/assets\\ui_font_FontAwesomepro6solid20.c",
+  "cfg_path": "/assets\\ui_font_FontAwesomepro6solid20.fcfg",
+  "size": 20,
+  "bpp": 4,
+  "letters": 0,
+  "ranges": [
+    "0xf185",
+    "0xf186"
+  ],
+  "symbols": "",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}
