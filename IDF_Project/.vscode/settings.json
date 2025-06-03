@@ -9,11 +9,9 @@
     "ESP_ROM_ELF_DIR": "/Users/karelfunda/.espressif/tools/esp-rom-elfs/20230320/",
     "IDF_TARGET": "esp32s3"
   },
-  "idf.openOcdConfigs": [
-    "board/esp32s3-builtin.cfg"
-  ],
+  "idf.openOcdConfigs": ["board/esp32s3-builtin.cfg"],
   "terminal.integrated.scrollback": 5000,
-  "idf.espIdfPathWin": "C:\\Espressif\\esp-idf\\v5.4.1\\esp-idf",
+  "idf.espIdfPathWin": "c:\\Espressif\\v5.4\\esp-idf",
   "idf.toolsPathWin": "C:\\Espressif",
   "idf.portWin": "COM3",
   "idf.monitorPort": "COM3"

@@ -42,9 +42,21 @@
 #include "dusk2dawn.h"
 #include <time.h>
 #include "dht.h"
+#include "esp_http_server.h"
+// #include <Update.h>
 
-#define WIFI_SSID "AMF"
-#define WIFI_PASS "AMF130+-"
+#include "esp_log.h"
+#include "esp_netif.h"
+
+#include "esp_system.h"
+
+#include "esp_partition.h"
+#include "esp_ota_ops.h"
+
+#define OTA_BUFF_SIZE 1024
+
+#define WIFI_SSID "BERYKO-HOST"
+#define WIFI_PASS "beryko22"
 
 #define EXAMPLE_PIN_NUM_SCLK 39
 #define EXAMPLE_PIN_NUM_MOSI 38
@@ -88,6 +100,8 @@
 #define LIGHT_GPIO 8      // můžeš změnit na libovolný GPIO
 #define DHT_GPIO 7        // nebo libovolný použitý GPIO
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 static float thermostat_threshold = 30.0f; // výchozí hodnota
 #define SLEEP_TIME 40000                   // 20 sekund v milisekundách
 static bool is_dimmed = false;
@@ -109,6 +123,9 @@ float g_humidity_dht22 = 0;
 bool g_light_on = false;
 bool g_heating_on = false;
 
+static const char *TAGWEB = "web";
+httpd_handle_t server = NULL;
+
 // Mutex (volitelné, doporučeno pro vícejádrové zápisy)
 SemaphoreHandle_t data_mutex;
 
@@ -120,6 +137,201 @@ SemaphoreHandle_t get_i2c_mutex(void);
 
 static EventGroupHandle_t wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
+
+static esp_err_t root_get_handler(httpd_req_t *req)
+{
+    const char *html =
+        "<!DOCTYPE html>"
+        "<html lang=\"cs\">"
+        "<head>"
+        "<meta charset=\"UTF-8\">"
+        "<title>Aktualizace firmware (OTA)</title>"
+        "<style>"
+        "body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }"
+        "h1 { color: #333; }"
+        "#status { margin-top: 15px; font-weight: bold; }"
+        "button { padding: 10px 20px; font-size: 16px; }"
+        "#overlay {"
+        "  display: none;"
+        "  position: fixed;"
+        "  top: 0; left: 0; width: 100%; height: 100%;"
+        "  background: rgba(0, 0, 0, 0.7);"
+        "  z-index: 1000;"
+        "  "
+        "  justify-content: center;"
+        "  align-items: center;"
+        "  flex-direction: column;"
+        "  color: #fff;"
+        "  font-size: 18px;"
+        "}"
+        "#loader {"
+        "  border: 8px solid #f3f3f3;"
+        "  border-top: 8px solid #3498db;"
+        "  border-radius: 50%;"
+        "  width: 60px;"
+        "  height: 60px;"
+        "  animation: spin 1s linear infinite;"
+        "  margin-bottom: 15px;"
+        "}"
+        "@keyframes spin {"
+        "  0% { transform: rotate(0deg); }"
+        "  100% { transform: rotate(360deg); }"
+        "}"
+        "</style>"
+        "</head>"
+        "<body>"
+        "<h1>Aktualizace firmware</h1>"
+        "<input type=\"file\" id=\"fileInput\"><br><br>"
+        "<button onclick=\"upload()\">Nahrát firmware</button>"
+        "<div id=\"status\"></div>"
+
+        "<div id=\"overlay\">"
+        "  <div id=\"loader\"></div>"
+        "  <div id=\"progressText\">Nahrávání... 0 %</div>"
+        "</div>"
+
+        "<script>"
+        "function upload() {"
+        "  const fileInput = document.getElementById('fileInput');"
+        "  const status = document.getElementById('status');"
+        "  const overlay = document.getElementById('overlay');"
+        "  const progressText = document.getElementById('progressText');"
+        "  const file = fileInput.files[0];"
+        "  if (!file) { alert('Vyberte soubor s firmwarem'); return; }"
+
+        "  overlay.style.display = 'flex';"
+        "  progressText.innerText = 'Nahrávání... 0 %';"
+
+        "  const xhr = new XMLHttpRequest();"
+        "  xhr.open('POST', '/update', true);"
+        "  xhr.setRequestHeader('Content-Type', 'application/octet-stream');"
+
+        "  xhr.upload.onprogress = function(event) {"
+        "    if (event.lengthComputable) {"
+        "      const percent = Math.round((event.loaded / event.total) * 100);"
+        "      progressText.innerText = 'Nahrávání... ' + percent + ' %';"
+        "    }"
+        "  };"
+
+        "  xhr.onload = function() {"
+        "    overlay.style.display = 'none';"
+        "    status.innerText = 'Úspěch: ' + xhr.responseText;"
+        "  };"
+
+        "  xhr.onerror = function() {"
+        "    overlay.style.display = 'none';"
+        "    status.innerText = 'Chyba při nahrávání';"
+        "  };"
+
+        "  xhr.send(file);"
+        "}"
+        "</script>"
+        "</body>"
+        "</html>";
+
+    httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+// POST endpoint – zatím jen potvrzení (bez OTA)
+static esp_err_t update_post_handler(httpd_req_t *req)
+{
+    char ota_buff[OTA_BUFF_SIZE]; // buffer pro příjem dat
+    int remaining = req->content_len;
+    int received;
+    const esp_partition_t *ota_partition = esp_ota_get_next_update_partition(NULL);
+    if (!ota_partition)
+    {
+        ESP_LOGE(TAGWEB, "Nelze najít OTA partition");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA partition nenalezena");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAGWEB, "Zahajuji OTA zápis do partition %s", ota_partition->label);
+
+    esp_ota_handle_t ota_handle;
+    esp_err_t err = esp_ota_begin(ota_partition, OTA_SIZE_UNKNOWN, &ota_handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAGWEB, "esp_ota_begin chyba: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chyba při zahájení OTA");
+        return ESP_FAIL;
+    }
+
+    while (remaining > 0)
+    {
+        received = httpd_req_recv(req, ota_buff, MIN(remaining, OTA_BUFF_SIZE));
+        ESP_LOGI(TAGWEB, "Přijato %d bajtů, zbývá %d", received, remaining);
+
+        if (received <= 0)
+        {
+            ESP_LOGE(TAGWEB, "Chyba při čtení OTA dat");
+            esp_ota_end(ota_handle);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chyba při čtení dat");
+            return ESP_FAIL;
+        }
+
+        err = esp_ota_write(ota_handle, ota_buff, received);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAGWEB, "esp_ota_write chyba: %s (err=0x%x)", esp_err_to_name(err), err);
+            esp_ota_end(ota_handle);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chyba při zápisu OTA");
+            return ESP_FAIL;
+        }
+
+        remaining -= received;
+    }
+
+    err = esp_ota_end(ota_handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAGWEB, "esp_ota_end chyba: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chyba při ukončení OTA");
+        return ESP_FAIL;
+    }
+
+    err = esp_ota_set_boot_partition(ota_partition);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAGWEB, "esp_ota_set_boot_partition chyba: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Nelze nastavit boot partition");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAGWEB, "OTA aktualizace dokončena, restartuji...");
+    httpd_resp_sendstr(req, "Update proběhl úspěšně. Zařízení se restartuje.");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
+    return ESP_OK;
+}
+
+// Spuštění serveru
+void start_webserver(void)
+{
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.max_uri_handlers = 12;
+    // config.max_req_hdr_len = 1024; // Výchozí je 512, zvýšit např. na 1024
+    config.max_resp_headers = 16;
+    config.stack_size = 8192;
+
+    if (httpd_start(&server, &config) == ESP_OK)
+    {
+        httpd_uri_t root_uri = {
+            .uri = "/",
+            .method = HTTP_GET,
+            .handler = root_get_handler};
+        httpd_register_uri_handler(server, &root_uri);
+
+        httpd_uri_t update_uri = {
+            .uri = "/update",
+            .method = HTTP_POST,
+            .handler = update_post_handler};
+        httpd_register_uri_handler(server, &update_uri);
+
+        ESP_LOGI(TAGWEB, "HTTP server spuštěn");
+    }
+}
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
@@ -136,6 +348,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     {
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
         ESP_LOGI("WIFI", "Připojeno!");
+        start_webserver();
     }
 }
 

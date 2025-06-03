@@ -25,8 +25,10 @@ idf_component_register(
           "ui/fonts"
           "../include"
       REQUIRES
+        app_update
         esp_wifi
-        esp_event
+        esp_http_server
+        esp_event       
         nvs_flash
         esp_netif
         spiffs
