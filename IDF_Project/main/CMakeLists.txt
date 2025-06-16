@@ -12,10 +12,12 @@ idf_component_register(
         "dht.c"
         "gauge.c"
         "main.c"
+        "nvs_lib.c"
         "ui/fonts/ui_font_FontAwesomepro6lightSmall.c"
         "ui/fonts/ui_font_FontAwesomepro6light20.c"
         "ui/fonts/ui_font_FontAwesomepro6light30.c"
         "ui/fonts/ui_font_FontAwesomepro6solid20.c"
+        "ui/fonts/ui_font_titulky.c"
         "ui/images/ui_img_1966217086.c"
         ${SRC_UI}
       INCLUDE_DIRS

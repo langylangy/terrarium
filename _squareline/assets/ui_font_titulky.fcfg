@@ -1,0 +1,14 @@
+{
+  "codename": "titulky",
+  "ttf_path": "/assets/Roboto-Regular.ttf",
+  "bin_path": "/assets\\ui_font_titulky.bin",
+  "c_path": "/assets\\ui_font_titulky.c",
+  "cfg_path": "/assets\\ui_font_titulky.fcfg",
+  "size": 16,
+  "bpp": 2,
+  "letters": 3,
+  "ranges": [],
+  "symbols": "OosvětleníjasJtermostatTDdélkSvětloUVBLE",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}

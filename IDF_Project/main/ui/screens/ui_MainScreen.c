@@ -36,7 +36,7 @@ void ui_event_ButtonMenu1(lv_event_t * e)
     lv_event_code_t event_code = lv_event_get_code(e);
 
     if(event_code == LV_EVENT_CLICKED) {
-        _ui_screen_change(&ui_ScreenMenu, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_ScreenMenu_screen_init);
+        _ui_screen_change(&ui_ScreenMenu, LV_SCR_LOAD_ANIM_FADE_ON, 10, 0, &ui_ScreenMenu_screen_init);
     }
 }
 
@@ -63,15 +63,15 @@ void ui_MainScreen_screen_init(void)
     lv_obj_clear_flag(ui_Image1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
     ui_ButtonMenu1 = lv_btn_create(ui_MainScreen);
-    lv_obj_set_width(ui_ButtonMenu1, 49);
-    lv_obj_set_height(ui_ButtonMenu1, 36);
-    lv_obj_set_x(ui_ButtonMenu1, -87);
-    lv_obj_set_y(ui_ButtonMenu1, 132);
+    lv_obj_set_width(ui_ButtonMenu1, 67);
+    lv_obj_set_height(ui_ButtonMenu1, 54);
+    lv_obj_set_x(ui_ButtonMenu1, -76);
+    lv_obj_set_y(ui_ButtonMenu1, 125);
     lv_obj_set_align(ui_ButtonMenu1, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_ButtonMenu1, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_clear_flag(ui_ButtonMenu1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
     lv_obj_set_style_bg_color(ui_ButtonMenu1, lv_color_hex(0x111111), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_ButtonMenu1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_ButtonMenu1, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(ui_ButtonMenu1, lv_color_hex(0x808080), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_ButtonMenu1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -82,7 +82,7 @@ void ui_MainScreen_screen_init(void)
     lv_label_set_text(ui_Label6, "");
     lv_obj_set_style_text_color(ui_Label6, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_Label6, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_Label6, &ui_font_FontAwesomepro6light20, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_Label6, &ui_font_FontAwesomepro6light30, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_PanelTime = lv_obj_create(ui_MainScreen);
     lv_obj_set_width(ui_PanelTime, 230);

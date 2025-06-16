@@ -5,12 +5,22 @@
 
 #include "ui.h"
 
-void AccelScreenLoadEvent(lv_event_t * e)
+void AccelScreenLoadEvent(lv_event_t *e)
 {
 	// Your code here
 }
 
-void AccelScreenUnloadEvent(lv_event_t * e)
+void AccelScreenUnloadEvent(lv_event_t *e)
+{
+	// Your code here
+}
+
+void slider1_event_handler(lv_event_t * e)
+{
+	// Your code here
+}
+
+void slider2_event_handler(lv_event_t * e)
 {
 	// Your code here
 }

@@ -52,11 +52,15 @@
 
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
+#include "nvs_lib.h"
 
 #define OTA_BUFF_SIZE 1024
 
-#define WIFI_SSID "BERYKO-HOST"
-#define WIFI_PASS "beryko22"
+// #define WIFI_SSID "BERYKO-HOST"
+// #define WIFI_PASS "beryko22"
+
+#define WIFI_SSID "AMF"
+#define WIFI_PASS "AMF130+-"
 
 #define EXAMPLE_PIN_NUM_SCLK 39
 #define EXAMPLE_PIN_NUM_MOSI 38
@@ -134,6 +138,7 @@ esp_lcd_touch_handle_t tp;
 
 SemaphoreHandle_t i2c_mutex;
 SemaphoreHandle_t get_i2c_mutex(void);
+int on_time_hours = 5; // délka svícení
 
 static EventGroupHandle_t wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
@@ -751,7 +756,6 @@ void screenTouch_task(void *pvParameters)
         {
             if (!is_dimmed)
             {
-                stored_brightness = 10;      // nastav vlastní logiku uložení
                 bsp_brightness_set_level(0); // vypni podsvícení
                 is_dimmed = true;
                 ESP_LOGI("SLEEP", "Displej zhasnut po %d ms nečinnosti", SLEEP_TIME);
@@ -1032,10 +1036,71 @@ void ds18b20_init_sensor()
     ds18b20_init(ds18b20_info, owb, rom_code);
     ds18b20_use_crc(ds18b20_info, true);
 }
+void slider1_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *slider = lv_event_get_target(e);
+
+    if (code == LV_EVENT_VALUE_CHANGED)
+    {
+        stored_brightness = lv_slider_get_value(slider);
+        nvs_save_int("brightness", stored_brightness);
+        bsp_brightness_set_level(stored_brightness); // <- vlastní funkce
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.0d", stored_brightness);
+        lv_label_set_text(ui_Label9, buf);
+    }
+}
+void slider2_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *slider = lv_event_get_target(e);
+
+    if (code == LV_EVENT_VALUE_CHANGED)
+    {
+        thermostat_threshold = lv_slider_get_value(slider);
+        nvs_save_float("thermostat", thermostat_threshold);
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.0f", thermostat_threshold);
+        lv_label_set_text(ui_Label1, buf);
+    }
+}
+void light_control_task(void *pvParameters)
+{
+    const int start_hour = 8; // čas zapnutí (např. 8:00)
+
+    while (1)
+    {
+        time_t now;
+        struct tm timeinfo;
+        time(&now);
+        localtime_r(&now, &timeinfo);
+
+        int current_hour = timeinfo.tm_hour;
+        int light_on_end = start_hour + on_time_hours;
+
+        bool light_should_be_on = (current_hour >= start_hour && current_hour < light_on_end);
+
+        gpio_set_level(LIGHT_GPIO, light_should_be_on ? 1 : 0);
+
+        ESP_LOGI(TAG, "Time: %02d:%02d, light %s", timeinfo.tm_hour, timeinfo.tm_min, light_should_be_on ? "ON" : "OFF");
+
+        vTaskDelay(pdMS_TO_TICKS(60000)); // kontrola každou minutu
+    }
+}
 
 void app_main(void)
 {
-
+    // Inicializuj NVS
+    esp_err_t err = nvs_lib_init();
+    if (err != ESP_OK)
+    {
+        printf("NVS init failed: %s\\n", esp_err_to_name(err));
+        return;
+    }
+    stored_brightness = nvs_load_int_default("brightness", 50);
+    thermostat_threshold = nvs_load_float_default("thermostat", 30);
+    char buf[32];
     data_mutex = xSemaphoreCreateMutex();
     i2c_mutex_init();
     lvgl_api_mux = xSemaphoreCreateRecursiveMutex();
@@ -1048,7 +1113,7 @@ void app_main(void)
     lvgl_tick_timer_init(EXAMPLE_LVGL_TICK_PERIOD_MS);
     xTaskCreatePinnedToCore(task, "bsp_lv_port_task", 1024 * 20, NULL, 5, NULL, 1);
     bsp_brightness_init();
-    bsp_brightness_set_level(10);
+    bsp_brightness_set_level(stored_brightness);
     // imu_fusion_init(0.35f, 0.60f);
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << THERMOSTAT_GPIO),
@@ -1079,6 +1144,16 @@ void app_main(void)
         ui_init();
         lvgl_unlock();
     }
+    snprintf(buf, sizeof(buf), "%.0d", stored_brightness);
+    lv_label_set_text(ui_Label9, buf);
+    snprintf(buf, sizeof(buf), "%.0f", thermostat_threshold);
+    lv_label_set_text(ui_Label1, buf);
+    lv_slider_set_value(ui_Slider1, stored_brightness, LV_ANIM_OFF);
+    lv_obj_add_event_cb(ui_Slider1, slider1_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
+
+    lv_slider_set_value(ui_Slider2, thermostat_threshold, LV_ANIM_OFF);
+    lv_obj_add_event_cb(ui_Slider2, slider2_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
+
     obtain_time();
     // lv_timer_create(speed_demo_cb, 50, NULL);
 
@@ -1093,6 +1168,7 @@ void app_main(void)
     xTaskCreatePinnedToCore(screenTouch_task, "screenTouch_task", 8192, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(dask2down_task, "dask2down_task", 8192, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(dht_task, "dht_task", 8192, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(light_control_task, "light_control_task", 4096, NULL, 5, NULL, 1);
     xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT,
                         pdFALSE, pdTRUE, portMAX_DELAY);
     // }

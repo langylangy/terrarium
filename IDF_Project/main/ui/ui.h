@@ -13,6 +13,8 @@ extern "C" {
 #include "lvgl.h"
 
 #include "ui_helpers.h"
+#include "components/ui_comp.h"
+#include "components/ui_comp_hook.h"
 #include "ui_events.h"
 
 
@@ -37,7 +39,7 @@ LV_FONT_DECLARE(ui_font_FontAwesomepro6light20);
 LV_FONT_DECLARE(ui_font_FontAwesomepro6light30);
 LV_FONT_DECLARE(ui_font_FontAwesomepro6lightSmall);
 LV_FONT_DECLARE(ui_font_FontAwesomepro6solid20);
-LV_FONT_DECLARE(ui_font_roboto14);
+LV_FONT_DECLARE(ui_font_titulky);
 
 // UI INIT
 void ui_init(void);
